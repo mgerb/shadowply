@@ -9,7 +9,7 @@ void capture_init(struct capture_capture* c, const char* title, int fps) {
 	memset(c, 0, sizeof(struct capture_capture));
 
 	c->window = window_util_find_window(title);
-	c->hdc_target = NULL;
+	c->hdc = NULL;
 	c->fps = fps;
 
 	RECT rect;
@@ -26,6 +26,7 @@ void capture_init(struct capture_capture* c, const char* title, int fps) {
 
 void capture_free(struct capture_capture* c) {
 	struct capture_bmp_node* node = c->bmp_node_first;
+	// free up linked list
 	for (;;) {
 		if (node == NULL) {
 			break;
@@ -35,37 +36,60 @@ void capture_free(struct capture_capture* c) {
 		DeleteObject(tmp->bmp);
 		free(tmp);
 	}
+	ReleaseDC(c->window, c->hdc);
+	CloseWindow(c->window);
 	DeleteObject(c->window);
-	DeleteObject(c->hdc_target);
+	DeleteObject(c->hdc);
 	free(c);
 }
 
-HBITMAP capture_frame(struct capture_capture* c) {
+/// <summary>
+/// Use BitBlt to capture window from HDC
+/// </summary>
+/// <param name="c"></param>
+/// <returns></returns>
+char* capture_frame(struct capture_capture* c) {
 
-	if (c->hdc_target == NULL) {
-		c->hdc_target = GetDC(c->window);
+	HDC hdc_target = GetDC(c->window);
+
+	if (c->hdc == NULL) {
+		c->hdc = CreateCompatibleDC(hdc_target);
 	}
 
-	HDC hdc = CreateCompatibleDC(c->hdc_target);
+	BITMAPINFOHEADER bmi = { 0 };
+	bmi.biSize = sizeof(BITMAPINFOHEADER);
+	bmi.biPlanes = 1;
+	bmi.biBitCount = 24;
+	bmi.biWidth = c->width;
+	bmi.biHeight = c->height;
+	bmi.biCompression = BI_RGB;
+	bmi.biSizeImage = c->width * c->height;
 
-	HBITMAP hBitmap = CreateCompatibleBitmap(c->hdc_target, c->width, c->height);
-	HBITMAP hOldBitmap = (HBITMAP)SelectObject(hdc, hBitmap);
+	HBITMAP hBitmap = CreateCompatibleBitmap(hdc_target, c->width, c->height);
+	// HBITMAP hOldBitmap = (HBITMAP)SelectObject(c->hdc, hBitmap);
 
-	BitBlt(hdc, 0, 0, c->width, c->height, c->hdc_target, c->x, c->y, SRCCOPY);
-	hBitmap = (HBITMAP)SelectObject(hdc, hOldBitmap);
+	SelectObject(c->hdc, hBitmap);
+	BitBlt(c->hdc, 0, 0, c->width, c->height, hdc_target, c->x, c->y, SRCCOPY);
+	// hBitmap = (HBITMAP)SelectObject(c->hdc, hOldBitmap);
 
-	ReleaseDC(NULL, c->hdc_target);
-	c->hdc_target = NULL;
-	ReleaseDC(NULL, hdc);
+	const h = c->width* c->height * 3;
 
-	return hBitmap;
+	char *rgb = malloc(h);
+
+	GetDIBits(c->hdc, hBitmap, 0, c->height, rgb, (BITMAPINFO*)&bmi, DIB_RGB_COLORS);
+
+	ReleaseDC(NULL, hdc_target);
+	DeleteObject(hBitmap);
+
+	return rgb;
 }
 
+// start capturing frames - sleep based on fps
 void capture_start_capture_loop(struct capture_capture* c) {
 	uint64_t nanoseconds_per_frame = util_get_nanoseconds_per_frame(c->fps);
 	uint64_t init_time = util_get_system_time_ns();
 	int frameCount = 0;
-	// capture 1 second per iteration
+
 	for (;;) {
 		if (frameCount >= c->fps * 10) {
 			break;
@@ -74,8 +98,8 @@ void capture_start_capture_loop(struct capture_capture* c) {
 		uint64_t time_target = start_time + nanoseconds_per_frame;
 
 		// TODO: handle if frame capture takes longer than time target
-		HBITMAP bmp = capture_frame(c);
-		capture_add_bmp(c, bmp);
+		char *rgb= capture_frame(c);
+		capture_add_bmp(c, rgb);
 
 		uint64_t frame_time = util_get_system_time_ns() - start_time;
 		printf("Frame time:% " PRIu64 "\n", frame_time);
@@ -87,10 +111,16 @@ void capture_start_capture_loop(struct capture_capture* c) {
 	printf("Total Time: %" PRIu64 "\n", end_time);
 }
 
-void capture_add_bmp(struct capture_capture* c, HBITMAP bmp) {
+/// <summary>
+/// Add new bitmap to linked list
+/// </summary>
+/// <param name="c"></param>
+/// <param name="bmp"></param>
+void capture_add_bmp(struct capture_capture* c, char *rgb) {
 	struct capture_bmp_node *newNode = malloc(sizeof(struct capture_bmp_node));
 	newNode->next = NULL;
-	newNode->bmp = bmp;
+	// newNode->bmp = bmp;
+	newNode->rgb = rgb;
 
 	if (c->bmp_node_first == NULL) {
 		c->bmp_node_first = newNode;
@@ -101,3 +131,24 @@ void capture_add_bmp(struct capture_capture* c, HBITMAP bmp) {
 	}
 }
 
+/// <summary>
+/// Write all all frames to individual bitmap files. Used for debug purposes.
+/// </summary>
+/// <param name="c"></param>
+void capture_write_frames_to_bitmaps(struct capture_capture* c) {
+	struct capture_bmp_node* node = c->bmp_node_first;
+
+	int count = 0;
+	for (;;) {
+		if (node == NULL) {
+			break;
+		}
+
+		char buf[20];
+		snprintf(buf, 20, "test%d.bmp", count);
+		util_write_bitmap(node->bmp, buf);
+
+		node = node->next;
+		count++;
+	}
+}

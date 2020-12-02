@@ -7,6 +7,7 @@
 #include "util.h"
 
 static char* windowN = "Windows PowerShell";
+static int fps = 30;
 
 int main()
 {
@@ -19,24 +20,14 @@ int main()
 	struct capture_capture* c = malloc(sizeof(struct capture_capture));
 
 	// init
-	capture_init(c, windowN, 60);
+	capture_init(c, windowN, fps);
 	capture_start_capture_loop(c);
+	// capture_write_frames_to_bitmaps(c);
 
-	struct capture_bmp_node* node = c->bmp_node_first;
 
-	int count = 0;
-	for (;;) {
-		if (node == NULL) {
-			break;
-		}
-
-		char buf[20];
-		snprintf(buf, 20, "test%d.bmp", count);
-		// util_write_bitmap(node->bmp, buf);
-
-		node = node->next;
-		count++;
-	}
+	// TODO:
+	// - convert bitmap rgp data to yuv420
+	// - look at ffmpeg encode example
 
 	capture_free(c);
 

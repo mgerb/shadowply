@@ -153,3 +153,4 @@ bool util_write_bitmap(HBITMAP hBitmap, LPCTSTR lpszFileName)
     return TRUE;
 }
 
+
