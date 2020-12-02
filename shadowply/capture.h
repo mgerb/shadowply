@@ -1,10 +1,10 @@
 #pragma once
 #include <Windows.h>
+#include <libavcodec/avcodec.h>
 
-struct capture_bmp_node {
-	char* rgb;
-	HBITMAP bmp;
-	struct capture_bmp_node *next;
+struct capture_frame_node {
+	AVFrame* frame;
+	struct capture_frame *next;
 };
 
 struct capture_capture {
@@ -15,15 +15,16 @@ struct capture_capture {
 	HWND window;
 	HDC hdc;
 	int fps;
-	// bitmap linked list
-	struct capture_bmp_node *bmp_node_first;
-	struct capture_bmp_node *bmp_node_last;
+
+	AVCodecContext* codec_ctx;
+	struct capture_frame_node* frame_node;
+	struct capture_frame_node* frame_node_last;
 };
 
 void capture_init(struct capture_capture* c, const char* title, int fps);
 void capture_write_frames_to_bitmaps(struct capture_capture* c);
 void capture_free(struct capture_capture* c);
-char* capture_frame(struct capture_capture* c);
-void capture_add_bmp(struct capture_capture* c, char *bmp);
+void capture_capture_frame(struct capture_capture* c);
+void capture_add_frame(struct capture_capture* c, struct capture_frame_node* frame);
 
 

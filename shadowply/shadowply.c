@@ -5,24 +5,24 @@
 #include <libavutil/opt.h>
 #include "capture.h"
 #include "util.h"
+#include "libav.h"
 
 static char* windowN = "Windows PowerShell";
-static int fps = 30;
+static int fps = 25;
 
 int main()
 {
-	const AVCodec* codec;
-	AVCodecContext *context = NULL;
-	
-	codec = avcodec_find_encoder_by_name("libx264");
-	context = avcodec_alloc_context3(codec);
+	avcodec_register_all();
 
 	struct capture_capture* c = malloc(sizeof(struct capture_capture));
 
 	// init
-	capture_init(c, windowN, fps);
+	capture_init(c, windowN, fps, AV_CODEC_ID_H264);
 	capture_start_capture_loop(c);
 	// capture_write_frames_to_bitmaps(c);
+
+	// encode_example("tmp.h264", AV_CODEC_ID_H264);
+	// encode_example("tmp.mpg", AV_CODEC_ID_MPEG1VIDEO);
 
 
 	// TODO:
@@ -30,8 +30,6 @@ int main()
 	// - look at ffmpeg encode example
 
 	capture_free(c);
-
-	avcodec_free_context(&context);
 
 	return 0;
 }

@@ -4,8 +4,14 @@
 #include "util.h"
 #include "window_util.h"
 #include <inttypes.h>
+#include "libav.h"
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#include <libavutil/imgutils.h>
 
-void capture_init(struct capture_capture* c, const char* title, int fps) {
+static int frameCount = 0;
+
+void capture_init(struct capture_capture* c, const char* title, int fps, int avcodec_id) {
 	memset(c, 0, sizeof(struct capture_capture));
 
 	c->window = window_util_find_window(title);
@@ -21,34 +27,68 @@ void capture_init(struct capture_capture* c, const char* title, int fps) {
 		c->x = 0; // TODO:
 		c->y = 0;
 	}
+
+    AVCodec* codec = avcodec_find_encoder(avcodec_id);
+	if (!codec) {
+		fprintf(stderr, "Codec '%d' not found\n", avcodec_id);
+		exit(1);
+	}
+
+	c->codec_ctx = avcodec_alloc_context3(codec);
+	if (!c->codec_ctx) {
+		fprintf(stderr, "Could not allocate video codec context\n");
+		exit(1);
+	}
+
+    c->codec_ctx->bit_rate = 10000;
+    c->codec_ctx->width = c->width;
+    c->codec_ctx->height = c->height;
+    c->codec_ctx->time_base = (AVRational){ 1, fps };
+    c->codec_ctx->framerate = (AVRational){ fps, 1 };
+    c->codec_ctx->gop_size = 10;
+    c->codec_ctx->max_b_frames = 1;
+    c->codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
+
+	if (codec->id == AV_CODEC_ID_H264) {
+		av_opt_set(c->codec_ctx->priv_data, "preset", "slow", 0);
+	}
+
+	int ret = avcodec_open2(c->codec_ctx, codec, NULL);
+	if (ret < 0) {
+		fprintf(stderr, "Could not open codec: %s\n", av_err2str(ret));
+		exit(1);
+	}
+
 	return c;
 }
 
 void capture_free(struct capture_capture* c) {
-	struct capture_bmp_node* node = c->bmp_node_first;
+	struct capture_frame_node* node = c->frame_node;
 	// free up linked list
 	for (;;) {
 		if (node == NULL) {
 			break;
 		}
-		struct capture_bmp_node* tmp = node;
-		node = node->next;
-		DeleteObject(tmp->bmp);
+		struct capture_frame_node* tmp = node;
+		node = tmp->next;
+		av_freep(&tmp->frame->data[0]);
+		av_frame_free(&tmp->frame);
 		free(tmp);
 	}
+
+	// TODO: check if this is deprecated or removed?
+	// av_codec_close(c->codec_ctx);
+	av_free(c->codec_ctx);
+
 	ReleaseDC(c->window, c->hdc);
 	CloseWindow(c->window);
 	DeleteObject(c->window);
 	DeleteObject(c->hdc);
+
 	free(c);
 }
 
-/// <summary>
-/// Use BitBlt to capture window from HDC
-/// </summary>
-/// <param name="c"></param>
-/// <returns></returns>
-char* capture_frame(struct capture_capture* c) {
+void capture_capture_frame(struct capture_capture* c) {
 
 	HDC hdc_target = GetDC(c->window);
 
@@ -66,22 +106,40 @@ char* capture_frame(struct capture_capture* c) {
 	bmi.biSizeImage = c->width * c->height;
 
 	HBITMAP hBitmap = CreateCompatibleBitmap(hdc_target, c->width, c->height);
-	// HBITMAP hOldBitmap = (HBITMAP)SelectObject(c->hdc, hBitmap);
-
 	SelectObject(c->hdc, hBitmap);
+
 	BitBlt(c->hdc, 0, 0, c->width, c->height, hdc_target, c->x, c->y, SRCCOPY);
-	// hBitmap = (HBITMAP)SelectObject(c->hdc, hOldBitmap);
 
 	const h = c->width* c->height * 3;
-
 	char *rgb = malloc(h);
-
 	GetDIBits(c->hdc, hBitmap, 0, c->height, rgb, (BITMAPINFO*)&bmi, DIB_RGB_COLORS);
 
+	AVFrame* frame = av_frame_alloc();
+    frame->format = c->codec_ctx->pix_fmt;
+    frame->width = c->codec_ctx->width;
+    frame->height = c->codec_ctx->height;
+	frame->pts = frameCount++ % c->codec_ctx->framerate.num;
+	int ret = av_frame_get_buffer(frame, 0);
+	if (ret < 0) {
+		fprintf(stderr, "Could not allocate the video frame data\n");
+		exit(1);
+	}
+	ret = av_frame_make_writable(frame);
+	fflush(stdout);
+
+	AVPacket* pkt = av_packet_alloc();
+
+	libav_yuv_from_rgb(c->codec_ctx, frame, rgb);
+	libav_encode_frame(c->codec_ctx, frame, pkt);
+
+	// add frame to list
+	capture_add_frame(c, frame);
+
+	// cleanup
+	av_packet_unref(pkt);
+	free(rgb);
 	ReleaseDC(NULL, hdc_target);
 	DeleteObject(hBitmap);
-
-	return rgb;
 }
 
 // start capturing frames - sleep based on fps
@@ -91,15 +149,14 @@ void capture_start_capture_loop(struct capture_capture* c) {
 	int frameCount = 0;
 
 	for (;;) {
-		if (frameCount >= c->fps * 10) {
+		if (frameCount >= c->fps * 5) {
 			break;
 		}
 		uint64_t start_time = util_get_system_time_ns();
 		uint64_t time_target = start_time + nanoseconds_per_frame;
 
 		// TODO: handle if frame capture takes longer than time target
-		char *rgb= capture_frame(c);
-		capture_add_bmp(c, rgb);
+		capture_capture_frame(c);
 
 		uint64_t frame_time = util_get_system_time_ns() - start_time;
 		printf("Frame time:% " PRIu64 "\n", frame_time);
@@ -111,44 +168,34 @@ void capture_start_capture_loop(struct capture_capture* c) {
 	printf("Total Time: %" PRIu64 "\n", end_time);
 }
 
-/// <summary>
-/// Add new bitmap to linked list
-/// </summary>
-/// <param name="c"></param>
-/// <param name="bmp"></param>
-void capture_add_bmp(struct capture_capture* c, char *rgb) {
-	struct capture_bmp_node *newNode = malloc(sizeof(struct capture_bmp_node));
-	newNode->next = NULL;
-	// newNode->bmp = bmp;
-	newNode->rgb = rgb;
+void capture_add_frame(struct capture_capture* c, AVFrame* frame) {
+	struct capture_frame_node* node = malloc(sizeof(struct capture_frame_node));
+	node->frame = frame;
+	node->next = NULL;
 
-	if (c->bmp_node_first == NULL) {
-		c->bmp_node_first = newNode;
-		c->bmp_node_last = c->bmp_node_first;
+	if (c->frame_node == NULL) {
+		c->frame_node = node;
+		c->frame_node_last = c->frame_node;
 	} else {
-		c->bmp_node_last->next = newNode;
-		c->bmp_node_last = newNode;
+		c->frame_node_last->next = node;
+		c->frame_node_last = node;
 	}
 }
 
-/// <summary>
-/// Write all all frames to individual bitmap files. Used for debug purposes.
-/// </summary>
-/// <param name="c"></param>
-void capture_write_frames_to_bitmaps(struct capture_capture* c) {
-	struct capture_bmp_node* node = c->bmp_node_first;
-
-	int count = 0;
-	for (;;) {
-		if (node == NULL) {
-			break;
-		}
-
-		char buf[20];
-		snprintf(buf, 20, "test%d.bmp", count);
-		util_write_bitmap(node->bmp, buf);
-
-		node = node->next;
-		count++;
-	}
-}
+//void capture_write_frames_to_bitmaps(struct capture_capture* c) {
+//	struct capture_bmp_node* node = c->bmp_node_first;
+//
+//	int count = 0;
+//	for (;;) {
+//		if (node == NULL) {
+//			break;
+//		}
+//
+//		char buf[20];
+//		snprintf(buf, 20, "test%d.bmp", count);
+//		util_write_bitmap(node->bmp, buf);
+//
+//		node = node->next;
+//		count++;
+//	}
+//}
