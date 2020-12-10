@@ -51,9 +51,10 @@ void capture_init(struct capture_capture* c, const char* title, int fps, int avc
     c->codec_ctx->max_b_frames = 1;
     c->codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
     // c->codec_ctx->pix_fmt = AV_PIX_FMT_RGB24;
+    // c->codec_ctx->pix_fmt = AV_PIX_FMT_RGB32;
 
 	if (codec->id == AV_CODEC_ID_H264) {
-		av_opt_set(c->codec_ctx->priv_data, "preset", "fast", 0);
+		av_opt_set(c->codec_ctx->priv_data, "preset", "ultrafast", 0);
 	}
 
 	int ret = avcodec_open2(c->codec_ctx, codec, NULL);
@@ -119,15 +120,6 @@ void capture_capture_frame(struct capture_capture* c) {
 	BITMAPINFO MyBMInfo = { 0 };
 	MyBMInfo.bmiHeader.biSize = sizeof(MyBMInfo.bmiHeader);
 
-	//BITMAPINFOHEADER bmi = { 0 };
-	//bmi.biSize = sizeof(BITMAPINFOHEADER);
-	//bmi.biPlanes = 1;
-	//bmi.biBitCount = 24;
-	//bmi.biWidth = c->width;
-	//bmi.biHeight = c->height;
-	//bmi.biCompression = BI_RGB;
-	//bmi.biSizeImage = c->width * c->height;
-
 	HBITMAP hBitmap = CreateCompatibleBitmap(hdc_target, c->width, c->height);
 	SelectObject(c->hdc, hBitmap);
 
@@ -145,32 +137,14 @@ void capture_capture_frame(struct capture_capture* c) {
 
 	c->frame->pts = frameCount++;
 
-	fflush(stdout);
-	av_frame_make_writable(c->frame);
+	// fflush(stdout);
+	// av_frame_make_writable(c->frame);
 
 	if (c->pkt_node_last == NULL) {
 		capture_add_pkt(c, av_packet_alloc());
 	}
 
 	libav_yuv_from_rgb(c->codec_ctx, c->frame, rgb);
-	//uint8_t* p = c->frame->data[0];
-	//uint8_t* r = rgb;
-	//for (int y = 0; y < c->height; y++) {
-	//	for (int x = 0; x < c->width; x++) {
-	//		*p++ = r++; // r
-	//		*p++ = r++; // g
-	//		*p++ = r++; // b
-	//		r++;
-	//	}
-	//}
-	//uint8_t* p = c->frame->data[0];
-	//for (int y = 0; y < c->height; y++) {
-	//	for (int x = 0; x < c->width; x++) {
-	//		*p++ = 100; // r
-	//		*p++ = 50; // g
-	//		*p++ = 240; // b
-	//	}
-	//}
 
 	bool enc = libav_encode_frame(c->codec_ctx, c->frame, c->pkt_node_last->pkt);
 
@@ -192,7 +166,7 @@ void capture_start_capture_loop(struct capture_capture* c) {
 	int frameCount = 0;
 
 	for (;;) {
-		if (frameCount >= c->fps * 5) {
+		if (frameCount >= c->fps * 10) {
 			break;
 		}
 		uint64_t start_time = util_get_system_time_ns();
