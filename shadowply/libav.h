@@ -1,10 +1,11 @@
 #pragma once
 #include <inttypes.h>
+#include <stdbool.h>
 #include <libavcodec/avcodec.h>
 
 
 void libav_yuv_from_rgb(AVCodecContext* context, AVFrame* frame, uint8_t* rgb);
-void libav_encode_frame(AVCodecContext* context, AVFrame* frame, AVPacket* pkt);
+bool libav_encode_frame(AVCodecContext* context, AVFrame* frame, AVPacket* pkt);
 
 void ffmpeg_encoder_set_frame_yuv_from_rgb(uint8_t* rgb);
 void encode_example(const char* filename, int codec_id);

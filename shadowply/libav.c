@@ -1,5 +1,6 @@
 #include "libav.h"
 #include <inttypes.h>
+#include <stdbool.h>
 
 #include <libswscale/version.h>
 #include <libavcodec/avcodec.h>
@@ -23,7 +24,8 @@ void libav_yuv_from_rgb(AVCodecContext* context, AVFrame* frame, uint8_t* rgb) {
 		context->height, frame->data, frame->linesize);
 }
 
-void libav_encode_frame(AVCodecContext* context, AVFrame* frame, AVPacket* pkt) {
+// return true if packet has been filled
+bool libav_encode_frame(AVCodecContext* context, AVFrame* frame, AVPacket* pkt) {
     int ret;
     /* send the frame to the encoder */
     if (frame) {
@@ -38,14 +40,14 @@ void libav_encode_frame(AVCodecContext* context, AVFrame* frame, AVPacket* pkt) 
     while (ret >= 0) {
         ret = avcodec_receive_packet(context, pkt);
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-            return;
+            return false;
         } else if (ret < 0) {
             fprintf(stderr, "Error during encoding\n");
             exit(1);
         }
 
         printf("Write packet %3"PRId64" (size=%5d)\n", pkt->pts, pkt->size);
-        // fwrite(pkt->data, 1, pkt->size, outfile);
+        return true;
     }
 }
 

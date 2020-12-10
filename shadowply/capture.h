@@ -2,9 +2,9 @@
 #include <Windows.h>
 #include <libavcodec/avcodec.h>
 
-struct capture_frame_node {
-	AVFrame* frame;
-	struct capture_frame *next;
+struct capture_pkt_node {
+	AVPacket* pkt;
+	struct capture_pkt_node *next;
 };
 
 struct capture_capture {
@@ -17,14 +17,15 @@ struct capture_capture {
 	int fps;
 
 	AVCodecContext* codec_ctx;
-	struct capture_frame_node* frame_node;
-	struct capture_frame_node* frame_node_last;
+	AVFrame* frame;
+	struct capture_pkt_node* pkt_node;
+	struct capture_pkt_node* pkt_node_last;
 };
 
 void capture_init(struct capture_capture* c, const char* title, int fps);
 void capture_write_frames_to_bitmaps(struct capture_capture* c);
 void capture_free(struct capture_capture* c);
 void capture_capture_frame(struct capture_capture* c);
-void capture_add_frame(struct capture_capture* c, struct capture_frame_node* frame);
+void capture_add_pkt(struct capture_capture* c, AVPacket* pkt);
 
 

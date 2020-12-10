@@ -59,20 +59,36 @@ void capture_init(struct capture_capture* c, const char* title, int fps, int avc
 		exit(1);
 	}
 
+	c->frame = av_frame_alloc();
+    c->frame->format = c->codec_ctx->pix_fmt;
+    c->frame->width = c->codec_ctx->width;
+    c->frame->height = c->codec_ctx->height;
+
+	ret = av_frame_get_buffer(c->frame, 0);
+	if (ret < 0) {
+		fprintf(stderr, "Could not allocate the video frame data\n");
+		exit(1);
+	}
+
 	return c;
 }
 
 void capture_free(struct capture_capture* c) {
-	struct capture_frame_node* node = c->frame_node;
+	struct capture_pkt_node* node = c->pkt_node;
 	// free up linked list
 	for (;;) {
 		if (node == NULL) {
 			break;
 		}
-		struct capture_frame_node* tmp = node;
+		struct capture_pkt_node* tmp = node;
 		node = tmp->next;
-		av_freep(&tmp->frame->data[0]);
-		av_frame_free(&tmp->frame);
+		// av_freep(&tmp->frame->data[0]);
+		// av_frame_free(&tmp->frame);
+
+		// TODO: unref packet after writing file
+		// av_packet_unref(tmp->pkt);
+
+		av_packet_free(&tmp->pkt);
 		free(tmp);
 	}
 
@@ -80,6 +96,7 @@ void capture_free(struct capture_capture* c) {
 	// av_codec_close(c->codec_ctx);
 	av_free(c->codec_ctx);
 
+	av_frame_free(&c->frame);
 	ReleaseDC(c->window, c->hdc);
 	CloseWindow(c->window);
 	DeleteObject(c->window);
@@ -118,7 +135,8 @@ void capture_capture_frame(struct capture_capture* c) {
     frame->format = c->codec_ctx->pix_fmt;
     frame->width = c->codec_ctx->width;
     frame->height = c->codec_ctx->height;
-	frame->pts = frameCount++ % c->codec_ctx->framerate.num;
+	// frame->pts = frameCount++ % c->codec_ctx->framerate.num;
+	frame->pts = frameCount++;
 	int ret = av_frame_get_buffer(frame, 0);
 	if (ret < 0) {
 		fprintf(stderr, "Could not allocate the video frame data\n");
@@ -127,16 +145,19 @@ void capture_capture_frame(struct capture_capture* c) {
 	ret = av_frame_make_writable(frame);
 	fflush(stdout);
 
-	AVPacket* pkt = av_packet_alloc();
+	if (c->pkt_node_last == NULL) {
+		capture_add_pkt(c, av_packet_alloc());
+	}
 
 	libav_yuv_from_rgb(c->codec_ctx, frame, rgb);
-	libav_encode_frame(c->codec_ctx, frame, pkt);
+	bool enc = libav_encode_frame(c->codec_ctx, frame, c->pkt_node_last->pkt);
 
-	// add frame to list
-	capture_add_frame(c, frame);
+	if (enc) {
+		capture_add_pkt(c, av_packet_alloc());
+	}
 
 	// cleanup
-	av_packet_unref(pkt);
+	// av_frame_free(&frame);
 	free(rgb);
 	ReleaseDC(NULL, hdc_target);
 	DeleteObject(hBitmap);
@@ -168,17 +189,17 @@ void capture_start_capture_loop(struct capture_capture* c) {
 	printf("Total Time: %" PRIu64 "\n", end_time);
 }
 
-void capture_add_frame(struct capture_capture* c, AVFrame* frame) {
-	struct capture_frame_node* node = malloc(sizeof(struct capture_frame_node));
-	node->frame = frame;
+void capture_add_pkt(struct capture_capture* c, AVPacket* pkt) {
+	struct capture_pkt_node* node = malloc(sizeof(struct capture_pkt_node));
+	node->pkt = pkt;
 	node->next = NULL;
 
-	if (c->frame_node == NULL) {
-		c->frame_node = node;
-		c->frame_node_last = c->frame_node;
+	if (c->pkt_node == NULL) {
+		c->pkt_node = node;
+		c->pkt_node_last = c->pkt_node;
 	} else {
-		c->frame_node_last->next = node;
-		c->frame_node_last = node;
+		c->pkt_node_last->next = node;
+		c->pkt_node_last = node;
 	}
 }
 
