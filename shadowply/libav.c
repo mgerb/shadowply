@@ -18,8 +18,8 @@ struct SwsContext* sws_context = NULL;
 void libav_yuv_from_rgb(AVCodecContext* context, AVFrame* frame, uint8_t* rgb) {
 	const int in_linesize[1] = { 3 * context->width };
 	sws_context = sws_getCachedContext(sws_context,
-		context->width, context->height, AV_PIX_FMT_RGB24,
-		context->width, context->height, AV_PIX_FMT_YUV420P, 0, 0, 0, 0);
+		context->width, context->height, AV_PIX_FMT_RGB32,
+		context->width, context->height, AV_PIX_FMT_YUV420P, SWS_BICUBIC, 0, 0, 0);
 	sws_scale(sws_context, (const uint8_t* const*)&rgb, in_linesize, 0,
 		context->height, frame->data, frame->linesize);
 }

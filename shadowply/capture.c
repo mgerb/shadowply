@@ -27,8 +27,10 @@ void capture_init(struct capture_capture* c, const char* title, int fps, int avc
 		c->x = 0; // TODO:
 		c->y = 0;
 	}
-
     AVCodec* codec = avcodec_find_encoder(avcodec_id);
+    // AVCodec* codec = avcodec_find_encoder(AV_CODEC_ID_MPEG2VIDEO);
+	// AVCodec* codec = avcodec_find_encoder_by_name("libx264rgb");
+	// AVCodec* codec = avcodec_find_encoder_by_name("mpeg1");
 	if (!codec) {
 		fprintf(stderr, "Codec '%d' not found\n", avcodec_id);
 		exit(1);
@@ -40,7 +42,7 @@ void capture_init(struct capture_capture* c, const char* title, int fps, int avc
 		exit(1);
 	}
 
-    c->codec_ctx->bit_rate = 10000;
+    c->codec_ctx->bit_rate = 5000000;
     c->codec_ctx->width = c->width;
     c->codec_ctx->height = c->height;
     c->codec_ctx->time_base = (AVRational){ 1, fps };
@@ -48,9 +50,10 @@ void capture_init(struct capture_capture* c, const char* title, int fps, int avc
     c->codec_ctx->gop_size = 10;
     c->codec_ctx->max_b_frames = 1;
     c->codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
+    // c->codec_ctx->pix_fmt = AV_PIX_FMT_RGB24;
 
 	if (codec->id == AV_CODEC_ID_H264) {
-		av_opt_set(c->codec_ctx->priv_data, "preset", "slow", 0);
+		av_opt_set(c->codec_ctx->priv_data, "preset", "fast", 0);
 	}
 
 	int ret = avcodec_open2(c->codec_ctx, codec, NULL);
@@ -113,14 +116,17 @@ void capture_capture_frame(struct capture_capture* c) {
 		c->hdc = CreateCompatibleDC(hdc_target);
 	}
 
-	BITMAPINFOHEADER bmi = { 0 };
-	bmi.biSize = sizeof(BITMAPINFOHEADER);
-	bmi.biPlanes = 1;
-	bmi.biBitCount = 24;
-	bmi.biWidth = c->width;
-	bmi.biHeight = c->height;
-	bmi.biCompression = BI_RGB;
-	bmi.biSizeImage = c->width * c->height;
+	BITMAPINFO MyBMInfo = { 0 };
+	MyBMInfo.bmiHeader.biSize = sizeof(MyBMInfo.bmiHeader);
+
+	//BITMAPINFOHEADER bmi = { 0 };
+	//bmi.biSize = sizeof(BITMAPINFOHEADER);
+	//bmi.biPlanes = 1;
+	//bmi.biBitCount = 24;
+	//bmi.biWidth = c->width;
+	//bmi.biHeight = c->height;
+	//bmi.biCompression = BI_RGB;
+	//bmi.biSizeImage = c->width * c->height;
 
 	HBITMAP hBitmap = CreateCompatibleBitmap(hdc_target, c->width, c->height);
 	SelectObject(c->hdc, hBitmap);
@@ -128,29 +134,45 @@ void capture_capture_frame(struct capture_capture* c) {
 	BitBlt(c->hdc, 0, 0, c->width, c->height, hdc_target, c->x, c->y, SRCCOPY);
 
 	const h = c->width* c->height * 3;
-	char *rgb = malloc(h);
-	GetDIBits(c->hdc, hBitmap, 0, c->height, rgb, (BITMAPINFO*)&bmi, DIB_RGB_COLORS);
 
-	AVFrame* frame = av_frame_alloc();
-    frame->format = c->codec_ctx->pix_fmt;
-    frame->width = c->codec_ctx->width;
-    frame->height = c->codec_ctx->height;
-	// frame->pts = frameCount++ % c->codec_ctx->framerate.num;
-	frame->pts = frameCount++;
-	int ret = av_frame_get_buffer(frame, 0);
-	if (ret < 0) {
-		fprintf(stderr, "Could not allocate the video frame data\n");
-		exit(1);
-	}
-	ret = av_frame_make_writable(frame);
+	GetDIBits(c->hdc, hBitmap, 0, 0, NULL, &MyBMInfo, DIB_RGB_COLORS);
+
+	BYTE *rgb = malloc(MyBMInfo.bmiHeader.biSizeImage);
+
+	MyBMInfo.bmiHeader.biCompression = BI_RGB;
+
+	GetDIBits(c->hdc, hBitmap, 0, MyBMInfo.bmiHeader.biHeight, rgb, &MyBMInfo, DIB_RGB_COLORS);
+
+	c->frame->pts = frameCount++;
+
 	fflush(stdout);
+	av_frame_make_writable(c->frame);
 
 	if (c->pkt_node_last == NULL) {
 		capture_add_pkt(c, av_packet_alloc());
 	}
 
-	libav_yuv_from_rgb(c->codec_ctx, frame, rgb);
-	bool enc = libav_encode_frame(c->codec_ctx, frame, c->pkt_node_last->pkt);
+	libav_yuv_from_rgb(c->codec_ctx, c->frame, rgb);
+	//uint8_t* p = c->frame->data[0];
+	//uint8_t* r = rgb;
+	//for (int y = 0; y < c->height; y++) {
+	//	for (int x = 0; x < c->width; x++) {
+	//		*p++ = r++; // r
+	//		*p++ = r++; // g
+	//		*p++ = r++; // b
+	//		r++;
+	//	}
+	//}
+	//uint8_t* p = c->frame->data[0];
+	//for (int y = 0; y < c->height; y++) {
+	//	for (int x = 0; x < c->width; x++) {
+	//		*p++ = 100; // r
+	//		*p++ = 50; // g
+	//		*p++ = 240; // b
+	//	}
+	//}
+
+	bool enc = libav_encode_frame(c->codec_ctx, c->frame, c->pkt_node_last->pkt);
 
 	if (enc) {
 		capture_add_pkt(c, av_packet_alloc());
@@ -201,6 +223,37 @@ void capture_add_pkt(struct capture_capture* c, AVPacket* pkt) {
 		c->pkt_node_last->next = node;
 		c->pkt_node_last = node;
 	}
+}
+
+void capture_write_packets(struct capture_capture* c) {
+
+	char* fileName = "output.h264";
+
+	AVFormatContext* formatContext;
+	avformat_alloc_output_context2(&formatContext, NULL, NULL, fileName);
+
+	// flush encoder
+	libav_encode_frame(c->codec_ctx, NULL, c->pkt_node_last->pkt);
+
+	FILE* outfile;
+	outfile = fopen(fileName, "wb");
+
+	struct capture_pkt_node* node = c->pkt_node;
+
+	// iterate through list and write packets to file
+	while (node != NULL) {
+
+		printf("Write packet %3"PRId64" (size=%5d)\n", node->pkt->pts, node->pkt->size);
+		fwrite(node->pkt->data, 1, node->pkt->size, outfile);
+		av_packet_unref(node->pkt);
+
+		node = node->next;
+	}
+
+	uint8_t endcode[] = { 0, 0, 1, 0xb7 };
+	// fwrite(endcode, 1, sizeof(endcode), outfile);
+
+	fclose(outfile);
 }
 
 //void capture_write_frames_to_bitmaps(struct capture_capture* c) {

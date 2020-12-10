@@ -7,12 +7,13 @@
 #include "util.h"
 #include "libav.h"
 
-static char* windowN = "Windows PowerShell";
-static int fps = 25;
+static char* windowN = "AssaultCube";
+static int fps = 30;
 
 int main()
 {
 	avcodec_register_all();
+	av_register_all();
 
 	struct capture_capture* c = malloc(sizeof(struct capture_capture));
 
@@ -20,6 +21,8 @@ int main()
 	capture_init(c, windowN, fps, AV_CODEC_ID_H264);
 	capture_start_capture_loop(c);
 	// capture_write_frames_to_bitmaps(c);
+
+	capture_write_packets(c);
 
 	// encode_example("tmp.h264", AV_CODEC_ID_H264);
 	// encode_example("tmp.mpg", AV_CODEC_ID_MPEG1VIDEO);

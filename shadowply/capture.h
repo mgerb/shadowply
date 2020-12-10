@@ -27,5 +27,6 @@ void capture_write_frames_to_bitmaps(struct capture_capture* c);
 void capture_free(struct capture_capture* c);
 void capture_capture_frame(struct capture_capture* c);
 void capture_add_pkt(struct capture_capture* c, AVPacket* pkt);
+void capture_write_packets(struct capture_capture* c);
 
 
