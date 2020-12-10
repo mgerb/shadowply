@@ -27,10 +27,19 @@ void capture_init(struct capture_capture* c, const char* title, int fps, int avc
 		c->x = 0; // TODO:
 		c->y = 0;
 	}
+
+	BITMAPINFOHEADER bmi = { 0 };
+	bmi.biSize = sizeof(BITMAPINFOHEADER);
+	bmi.biPlanes = 1;
+	bmi.biBitCount = 32;
+	bmi.biWidth = c->width;
+	bmi.biHeight = c->height;
+	bmi.biCompression = BI_RGB;
+	bmi.biSizeImage = c->width * c->height * 4;
+
+	c->bmi = bmi;
+
     AVCodec* codec = avcodec_find_encoder(avcodec_id);
-    // AVCodec* codec = avcodec_find_encoder(AV_CODEC_ID_MPEG2VIDEO);
-	// AVCodec* codec = avcodec_find_encoder_by_name("libx264rgb");
-	// AVCodec* codec = avcodec_find_encoder_by_name("mpeg1");
 	if (!codec) {
 		fprintf(stderr, "Codec '%d' not found\n", avcodec_id);
 		exit(1);
@@ -50,8 +59,6 @@ void capture_init(struct capture_capture* c, const char* title, int fps, int avc
     c->codec_ctx->gop_size = 10;
     c->codec_ctx->max_b_frames = 1;
     c->codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
-    // c->codec_ctx->pix_fmt = AV_PIX_FMT_RGB24;
-    // c->codec_ctx->pix_fmt = AV_PIX_FMT_RGB32;
 
 	if (codec->id == AV_CODEC_ID_H264) {
 		av_opt_set(c->codec_ctx->priv_data, "preset", "ultrafast", 0);
@@ -86,11 +93,6 @@ void capture_free(struct capture_capture* c) {
 		}
 		struct capture_pkt_node* tmp = node;
 		node = tmp->next;
-		// av_freep(&tmp->frame->data[0]);
-		// av_frame_free(&tmp->frame);
-
-		// TODO: unref packet after writing file
-		// av_packet_unref(tmp->pkt);
 
 		av_packet_free(&tmp->pkt);
 		free(tmp);
@@ -117,28 +119,16 @@ void capture_capture_frame(struct capture_capture* c) {
 		c->hdc = CreateCompatibleDC(hdc_target);
 	}
 
-	BITMAPINFO MyBMInfo = { 0 };
-	MyBMInfo.bmiHeader.biSize = sizeof(MyBMInfo.bmiHeader);
 
 	HBITMAP hBitmap = CreateCompatibleBitmap(hdc_target, c->width, c->height);
 	SelectObject(c->hdc, hBitmap);
 
 	BitBlt(c->hdc, 0, 0, c->width, c->height, hdc_target, c->x, c->y, SRCCOPY);
 
-	const h = c->width* c->height * 3;
-
-	GetDIBits(c->hdc, hBitmap, 0, 0, NULL, &MyBMInfo, DIB_RGB_COLORS);
-
-	BYTE *rgb = malloc(MyBMInfo.bmiHeader.biSizeImage);
-
-	MyBMInfo.bmiHeader.biCompression = BI_RGB;
-
-	GetDIBits(c->hdc, hBitmap, 0, MyBMInfo.bmiHeader.biHeight, rgb, &MyBMInfo, DIB_RGB_COLORS);
+	BYTE *rgb = malloc(c->bmi.biSizeImage);
+	GetDIBits(c->hdc, hBitmap, 0, c->height, rgb, (BITMAPINFO*)&c->bmi, DIB_RGB_COLORS);
 
 	c->frame->pts = frameCount++;
-
-	// fflush(stdout);
-	// av_frame_make_writable(c->frame);
 
 	if (c->pkt_node_last == NULL) {
 		capture_add_pkt(c, av_packet_alloc());

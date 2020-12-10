@@ -20,6 +20,7 @@ struct capture_capture {
 	AVFrame* frame;
 	struct capture_pkt_node* pkt_node;
 	struct capture_pkt_node* pkt_node_last;
+	BITMAPINFOHEADER bmi;
 };
 
 void capture_init(struct capture_capture* c, const char* title, int fps);
