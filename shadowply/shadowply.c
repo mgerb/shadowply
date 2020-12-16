@@ -3,36 +3,24 @@
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/opt.h>
-#include "capture.h"
 #include "util.h"
 #include "libav.h"
+#include "runner.h"
 
 static char* windowN = "AssaultCube";
-static int fps = 30;
+static int fps = 60;
+static int bit_rate = 5000000;
 
 int main()
 {
-	avcodec_register_all();
-	av_register_all();
+	runner* r = malloc(sizeof(runner));
 
-	struct capture_capture* c = malloc(sizeof(struct capture_capture));
+	runner_init(r, windowN, fps, bit_rate);
 
-	// init
-	capture_init(c, windowN, fps, AV_CODEC_ID_H264);
-	capture_start_capture_loop(c);
-	// capture_write_frames_to_bitmaps(c);
+	runner_start_loop(r);
+	runner_write_packets(r, "new_output.h264");
 
-	capture_write_packets(c);
-
-	// encode_example("tmp.h264", AV_CODEC_ID_H264);
-	// encode_example("tmp.mpg", AV_CODEC_ID_MPEG1VIDEO);
-
-
-	// TODO:
-	// - convert bitmap rgp data to yuv420
-	// - look at ffmpeg encode example
-
-	capture_free(c);
+	runner_free(r);
 
 	return 0;
 }

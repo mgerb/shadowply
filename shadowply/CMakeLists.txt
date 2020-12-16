@@ -4,7 +4,7 @@
 cmake_minimum_required (VERSION 3.8)
 
 # Add source to this project's executable.
-add_executable (shadowply "shadowply.c" "shadowply.h" "util.h" "util.c" "capture.c" "capture.h" "window_util.h" "window_util.c" "libav.h" "libav.c")
+add_executable (shadowply "shadowply.c" "shadowply.h" "util.h" "util.c"   "window_util.h" "window_util.c" "libav.h" "libav.c" "encoder.h" "encoder.c" "runner.h" "runner.c" "capture/dc_capture.h" "capture/dc_capture.c")
 
 # TODO: Add tests and install targets if needed.
 
