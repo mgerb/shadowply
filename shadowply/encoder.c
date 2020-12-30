@@ -2,6 +2,7 @@
 #include <libavcodec/avcodec.h>
 #include <stdbool.h>
 #include "libav.h"
+#include "util.h"
 
 void encoder_init(encoder* e, int width, int height, int fps, int avcodec_id, int bit_rate) {
 	memset(e, 0, sizeof(encoder));
@@ -31,6 +32,7 @@ void encoder_init(encoder* e, int width, int height, int fps, int avcodec_id, in
 
 	if (codec->id == AV_CODEC_ID_H264) {
 		av_opt_set(e->ctx->priv_data, "preset", "ultrafast", 0);
+		av_opt_set(e->ctx->priv_data, "tune", "zerolatency", 0);
 	}
 
 	int ret = avcodec_open2(e->ctx, codec, NULL);
@@ -57,9 +59,29 @@ void encoder_free(encoder* e) {
 	free(e);
 }
 
-bool encoder_encode_rgb(encoder* e, AVPacket* pkt, uint8_t* rgb) {
+bool encoder_encode_frame(encoder* e, AVPacket* pkt) {
 	e->frame->pts = e->frame_count++;
-	libav_yuv_from_rgb(e->ctx, e->frame, rgb);
-	return libav_encode_frame(e->ctx, e->frame, pkt);
+	libav_encode_frame(e->ctx, e->frame, pkt);
 }
+
+//static uint64_t encode_max = 0;
+
+//bool encoder_encode_rgb(encoder* e, AVPacket* pkt, uint8_t* rgb) {
+//	e->frame->pts = e->frame_count++;
+//	util_start_bench();
+//	libav_yuv_from_rgb(e->ctx, e->frame, rgb);
+//	util_stop_bench("rgb to yuv");
+//	util_start_bench();
+//
+//	uint64_t c_time = util_get_system_time_ns();
+//	bool ret = libav_encode_frame(e->ctx, e->frame, pkt);
+//	uint64_t end_time = util_get_system_time_ns();
+//	uint64_t delta = util_get_system_time_ns() - c_time;
+//	encode_max = encode_max > delta ? encode_max : delta;
+//
+//	printf("encode max:% " PRIu64 "\n", encode_max);
+//
+//	util_stop_bench("encode frame");
+//	return ret;
+//}
 

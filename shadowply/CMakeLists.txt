@@ -3,11 +3,11 @@
 #
 cmake_minimum_required (VERSION 3.8)
 
+set(PTHREAD_DIR ${CMAKE_SOURCE_DIR}/libs/pthread-win32)
+set(FFMPEG_DIR ${CMAKE_SOURCE_DIR}/libs/ffmpeg/include)
+
 # Add source to this project's executable.
 add_executable (shadowply "shadowply.c" "shadowply.h" "util.h" "util.c"   "window_util.h" "window_util.c" "libav.h" "libav.c" "encoder.h" "encoder.c" "runner.h" "runner.c" "capture/dc_capture.h" "capture/dc_capture.c")
-
-# TODO: Add tests and install targets if needed.
-
 
 find_library(AVCODEC_LIBRARY 
 	NAMES avcodec
@@ -29,8 +29,11 @@ find_library(SWSCALE_LIBRARY
 	HINTS "${CMAKE_SOURCE_DIR}/libs/ffmpeg/lib"
 )
 
-set(FFMPEG_DIR ${CMAKE_SOURCE_DIR}/libs/ffmpeg/include)
+find_library(PTHREAD_LIBRARY 
+	NAMES pthread_dll
+	HINTS "${PTHREAD_DIR}"
+)
 
-target_include_directories(shadowply PRIVATE ${FFMPEG_DIR})
-target_link_libraries(shadowply PRIVATE ${AVCODEC_LIBRARY} ${AVUTIL_LIBRARY} ${AVFORMAT_LIBRARY} ${SWSCALE_LIBRARY})
+target_include_directories(shadowply PRIVATE ${FFMPEG_DIR} ${CMAKE_SOURCE_DIR}/libs/pthread-win32)
+target_link_libraries(shadowply PRIVATE ${AVCODEC_LIBRARY} ${AVUTIL_LIBRARY} ${AVFORMAT_LIBRARY} ${SWSCALE_LIBRARY} ${PTHREAD_LIBRARY})
 

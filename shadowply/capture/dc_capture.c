@@ -1,5 +1,7 @@
 #include "dc_capture.h"
 #include "../window_util.h"
+#include "../libav.h"
+#include <libavcodec/avcodec.h>
 
 void dc_capture_init(dc_capture* c, char* title) {
 	memset(c, 0, sizeof(dc_capture));
@@ -7,7 +9,6 @@ void dc_capture_init(dc_capture* c, char* title) {
 	c->window = window_util_find_window(title);
 
 	RECT rect;
-	int width = 0, height = 0;
 
 	if (GetClientRect(c->window, &rect)) {
 		c->width = rect.right - rect.left;
@@ -19,19 +20,37 @@ void dc_capture_init(dc_capture* c, char* title) {
 	BITMAPINFOHEADER bmi = { 0 };
 	bmi.biSize = sizeof(BITMAPINFOHEADER);
 	bmi.biPlanes = 1;
-	bmi.biBitCount = 24;
+	bmi.biBitCount = 32;
 	bmi.biWidth = c->width;
 	bmi.biHeight = -c->height; // must be negative or image is flipped
 	bmi.biCompression = BI_RGB;
-	bmi.biSizeImage = c->width * c->height * 3;
+	bmi.biSizeImage = c->width * c->height * 4;
 
 	c->bmi = bmi;
+
+
+	c->frame = av_frame_alloc();
+	c->frame->format = AV_PIX_FMT_YUV420P;
+	c->frame->width = c->width;
+	c->frame->height = c->height;
+
+	int ret = av_frame_get_buffer(c->frame, 0);
+	if (ret < 0) {
+		fprintf(stderr, "Could not allocate the video frame data\n");
+		exit(1);
+	}
+
+	int size = avpicture_get_size(c->frame->format, c->width, c->height);
+	c->data = malloc(size);
 }
 
 void dc_capture_free(dc_capture* c) {
+	av_frame_free(c->frame);
 	ReleaseDC(c->window, c->hdc);
 	DeleteObject(c->hdc);
 	DeleteObject(c->window);
+	free(c->data);
+	free(c->rgb);
 	free(c);
 }
 
@@ -56,4 +75,7 @@ void dc_capture_tick(dc_capture* c) {
 	GetDIBits(c->hdc, c->hBitmap, 0, c->height, c->rgb, (BITMAPINFO*)&c->bmi, DIB_RGB_COLORS);
 
 	ReleaseDC(NULL, hdc_target);
+
+	libav_rgb_to_yuv(c->frame, c->rgb, c->width, c->height);
 }
+

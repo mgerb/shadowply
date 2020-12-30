@@ -10,22 +10,22 @@
 
 struct SwsContext* sws_context = NULL;
 
-void libav_yuv_from_rgb(AVCodecContext* context, AVFrame* frame, uint8_t* rgb) {
-	const int in_linesize[3] = { 3 * context->width, 0, 0 };
+void libav_rgb_to_yuv(AVFrame* frame, uint8_t* rgb, int width, int height) {
+	const int in_linesize[3] = { 4 * width, 0, 0 };
 	sws_context = sws_getCachedContext(sws_context,
-		context->width, context->height, AV_PIX_FMT_RGB24,
-		context->width, context->height, AV_PIX_FMT_YUV420P, SWS_BILINEAR, NULL, NULL, NULL);
+		width, height, AV_PIX_FMT_RGB32,
+		width, height, AV_PIX_FMT_YUV420P, SWS_BILINEAR, NULL, NULL, NULL);
 	sws_scale(sws_context, (const uint8_t* const*)&rgb, in_linesize, 0,
-		context->height, frame->data, frame->linesize);
+		height, frame->data, frame->linesize);
 }
 
 // return true if packet has been filled
 bool libav_encode_frame(AVCodecContext* context, AVFrame* frame, AVPacket* pkt) {
     int ret;
     /* send the frame to the encoder */
-    if (frame) {
-        printf("Send frame %3"PRId64"\n", frame->pts);
-    }
+    //if (frame) {
+    //    printf("Send frame %3"PRId64"\n", frame->pts);
+    //}
     ret = avcodec_send_frame(context, frame);
     if (ret < 0) {
 		fprintf(stderr, "Error sending a frame for encoding: %s\n", av_err2str(ret));
@@ -41,9 +41,23 @@ bool libav_encode_frame(AVCodecContext* context, AVFrame* frame, AVPacket* pkt) 
             exit(1);
         }
 
-        printf("Write packet %3"PRId64" (size=%5d)\n", pkt->pts, pkt->size);
+        // printf("Write packet %3"PRId64" (size=%5d)\n", pkt->pts, pkt->size);
         return true;
     }
+}
+
+// not tested  yet - might not work
+AVFrame* libav_deep_copy_frame(AVFrame* frame) {
+    AVFrame* copyFrame = av_frame_alloc();
+    copyFrame->format = frame->format;
+    copyFrame->width = frame->width;
+    copyFrame->height = frame->height;
+    copyFrame->channels = frame->channels;
+    copyFrame->channel_layout = frame->channel_layout;
+    copyFrame->nb_samples = frame->nb_samples;
+    av_frame_get_buffer(copyFrame, 0);
+    av_frame_copy(copyFrame, frame);
+    av_frame_copy_props(copyFrame, frame);
 }
 
 //void ffmpeg_encoder_set_frame_yuv_from_rgb(uint8_t* rgb) {

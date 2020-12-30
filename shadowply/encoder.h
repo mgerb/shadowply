@@ -11,5 +11,5 @@ typedef struct encoder {
 
 void encoder_init(encoder* e, int width, int height, int fps, int avcodec_id, int bit_rate);
 void encoder_free(encoder* e);
-bool encoder_encode_rgb(encoder* e, AVPacket* pkt, uint8_t* rgb);
+bool encoder_encode_frame(encoder* e, AVPacket* pkt);
 

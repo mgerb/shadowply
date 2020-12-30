@@ -9,6 +9,8 @@ static inline uint64_t util_get_clockfreq();
 uint64_t util_get_system_time_ns();
 bool util_sleepto_ns(uint64_t time_target);
 uint64_t util_get_nanoseconds_per_frame(int fps);
+void util_start_bench();
+void util_stop_bench(char* msg);
 
 // get system time in milliseconds
 long long util_get_system_time();

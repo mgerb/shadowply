@@ -4,6 +4,7 @@
 #include <time.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <inttypes.h>
 
 static bool have_clockfreq = false;
 static LARGE_INTEGER clock_freq;
@@ -69,6 +70,18 @@ bool util_sleepto_ns(uint64_t time_target) {
 
 uint64_t util_get_nanoseconds_per_frame(int fps) {
 	return 1000000000ULL / fps;
+}
+
+
+static uint64_t bench_time;
+
+void util_start_bench() {
+    bench_time = util_get_system_time_ns();
+}
+
+void util_stop_bench(char* msg) {
+    uint64_t current_time = util_get_system_time_ns();
+	printf("%s:% " PRIu64 " ns\n", msg, current_time - bench_time);
 }
 
 
