@@ -19,11 +19,12 @@ typedef struct runner {
 	encoder* encoder;
 	dc_capture* dc_capture;
 	runner_pkt_list pkt_list;
-	// bytes storing current texture
-	uint8_t* texture;
+	// frame used to store the active texture
+	AVFrame* texture_frame;
 	pthread_t capture_thread;
 	pthread_t encoder_thread;
 	pthread_mutex_t mutex;
+	bool exit_threads;
 } runner;
 
 void runner_init(runner* r, char* window_title, int fps);
@@ -38,4 +39,10 @@ void runner_start_capture_loop(runner* r);
 
 // start encoding textures on thread
 void runner_start_encoder_loop(runner* r);
+
+// start threads and start capturing
+void runner_start(runner* r);
+
+// signal stop and wait for all threads to stop
+void runner_stop(runner* r);
 

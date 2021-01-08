@@ -9,7 +9,12 @@ void encoder_init(encoder* e, int width, int height, int fps, int avcodec_id, in
 
 	e->frame_count = 0;
 
-	AVCodec* codec = avcodec_find_encoder(avcodec_id);
+	// nvidia encoding
+	AVCodec* codec = avcodec_find_encoder_by_name("h264_nvenc");
+
+	// TODO: software h264 encoding
+	// AVCodec* codec = avcodec_find_encoder(avcodec_id);
+
 	if (!codec) {
 		fprintf(stderr, "Codec '%d' not found\n", avcodec_id);
 		exit(1);
@@ -31,8 +36,9 @@ void encoder_init(encoder* e, int width, int height, int fps, int avcodec_id, in
 	e->ctx->pix_fmt = AV_PIX_FMT_YUV420P;
 
 	if (codec->id == AV_CODEC_ID_H264) {
-		av_opt_set(e->ctx->priv_data, "preset", "ultrafast", 0);
-		av_opt_set(e->ctx->priv_data, "tune", "zerolatency", 0);
+		// TODO: software h264 encoding
+		// av_opt_set(e->ctx->priv_data, "preset", "ultrafast", 0);
+		// av_opt_set(e->ctx->priv_data, "tune", "zerolatency", 0);
 	}
 
 	int ret = avcodec_open2(e->ctx, codec, NULL);
@@ -54,8 +60,9 @@ void encoder_init(encoder* e, int width, int height, int fps, int avcodec_id, in
 }
 
 void encoder_free(encoder* e) {
-	av_free(e->ctx);
+	// av_frame_unref(e->frame);
 	av_frame_free(&e->frame);
+	avcodec_free_context(&e->ctx);
 	free(e);
 }
 
@@ -63,25 +70,4 @@ bool encoder_encode_frame(encoder* e, AVPacket* pkt) {
 	e->frame->pts = e->frame_count++;
 	libav_encode_frame(e->ctx, e->frame, pkt);
 }
-
-//static uint64_t encode_max = 0;
-
-//bool encoder_encode_rgb(encoder* e, AVPacket* pkt, uint8_t* rgb) {
-//	e->frame->pts = e->frame_count++;
-//	util_start_bench();
-//	libav_yuv_from_rgb(e->ctx, e->frame, rgb);
-//	util_stop_bench("rgb to yuv");
-//	util_start_bench();
-//
-//	uint64_t c_time = util_get_system_time_ns();
-//	bool ret = libav_encode_frame(e->ctx, e->frame, pkt);
-//	uint64_t end_time = util_get_system_time_ns();
-//	uint64_t delta = util_get_system_time_ns() - c_time;
-//	encode_max = encode_max > delta ? encode_max : delta;
-//
-//	printf("encode max:% " PRIu64 "\n", encode_max);
-//
-//	util_stop_bench("encode frame");
-//	return ret;
-//}
 

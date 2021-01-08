@@ -17,27 +17,30 @@ int main()
 	avcodec_register_all();
 	av_register_all();
 
-	runner* r = malloc(sizeof(runner));
+	int count = 0;
 
-	runner_init(r, windowN, fps, bit_rate);
+	for (;;) {
+		// init runner
+		runner* r = malloc(sizeof(runner));
+		runner_init(r, windowN, fps, bit_rate);
 
-	//runner_start_capture_loop(r);
-	//runner_start_encoder_loop(r);
+		// start runner
+		runner_start(r);
 
-	 pthread_create(&r->capture_thread, NULL, &runner_start_capture_loop, r);
-	 pthread_create(&r->encoder_thread, NULL, &runner_start_encoder_loop, r);
+		// sleep 10 seconds
+		Sleep(10000);
 
-	// wait for threads
-	 //pthread_join(r->capture_thread, NULL);
+		// wait for runner to stop
+		runner_stop(r);
 
-	pthread_join(r->encoder_thread, NULL);
+		char dst[20] = "out";
+		itoa(count, dst + 3, 10);
+		strcat(dst, ".h264");
+		runner_write_packets(r, dst);
 
-	// TODO: kill capture thread
-
-	//runner_start_loop(r);
-	runner_write_packets(r, "out.h264");
-
-	runner_free(r);
+		runner_free(r);
+		count++;
+	}
 
 	return 0;
 }

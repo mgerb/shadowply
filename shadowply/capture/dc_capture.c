@@ -41,15 +41,13 @@ void dc_capture_init(dc_capture* c, char* title) {
 	}
 
 	int size = avpicture_get_size(c->frame->format, c->width, c->height);
-	c->data = malloc(size);
 }
 
 void dc_capture_free(dc_capture* c) {
-	av_frame_free(c->frame);
 	ReleaseDC(c->window, c->hdc);
 	DeleteObject(c->hdc);
 	DeleteObject(c->window);
-	free(c->data);
+	av_frame_free(&c->frame);
 	free(c->rgb);
 	free(c);
 }

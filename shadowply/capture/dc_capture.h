@@ -15,8 +15,6 @@ typedef struct dc_capture {
 	BITMAPINFOHEADER bmi;
 	// convert and store rgb data in frame
 	AVFrame* frame;
-	// yuv data
-	uint8_t* data;
 	bool has_data;
 
 } dc_capture;
