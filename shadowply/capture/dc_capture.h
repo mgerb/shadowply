@@ -13,13 +13,13 @@ typedef struct dc_capture {
 	// RGB storage for current captured frame
 	uint8_t* rgb;
 	BITMAPINFOHEADER bmi;
-	// convert and store rgb data in frame
+	// Frame that holds raw RGB data - updates every tick
 	AVFrame* frame;
 	bool has_data;
 
 } dc_capture;
 
-void dc_capture_init(dc_capture* c, char* title);
+void dc_capture_init(dc_capture* c, char* title, int pix_fmt);
 void dc_capture_free(dc_capture* c);
 
 // capture bits from window and convert to yuv format

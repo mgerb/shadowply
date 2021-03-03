@@ -25,14 +25,17 @@ typedef struct runner {
 	pthread_t encoder_thread;
 	pthread_mutex_t mutex;
 	bool exit_threads;
+	// max seconds of video to store in memory before overwriting
+	int max_seconds;
 } runner;
 
-void runner_init(runner* r, char* window_title, int fps);
+void runner_init(runner* r, char* window_title, int fps, int bit_rate, int max_seconds);
 void runner_free(runner* r);
 void runner_start_loop(runner* r);
 void runner_tick(runner* r);
 void runner_add_pkt(runner* r, AVPacket* pkt);
 void runner_write_packets(runner* r, char* fileName);
+void runner_pkt_node_free(runner_pkt_node* node);
 
 // start capturing textures on thread
 void runner_start_capture_loop(runner* r);

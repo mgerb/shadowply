@@ -10,6 +10,11 @@
 
 struct SwsContext* sws_context = NULL;
 
+void libav_fill_frame(AVFrame *frame, uint8_t *rgb) {
+    frame->data[0] = rgb;
+    //avpicture_fill((AVPicture*)frame, rgb, frame->format, frame->width, frame->height);
+}
+
 void libav_rgb_to_yuv(AVFrame* frame, uint8_t* rgb, int width, int height) {
 	const int in_linesize[3] = { 4 * width, 0, 0 };
 	sws_context = sws_getCachedContext(sws_context,
@@ -22,10 +27,6 @@ void libav_rgb_to_yuv(AVFrame* frame, uint8_t* rgb, int width, int height) {
 // return true if packet has been filled
 bool libav_encode_frame(AVCodecContext* context, AVFrame* frame, AVPacket* pkt) {
     int ret;
-    /* send the frame to the encoder */
-    //if (frame) {
-    //    printf("Send frame %3"PRId64"\n", frame->pts);
-    //}
     ret = avcodec_send_frame(context, frame);
     if (ret < 0) {
 		fprintf(stderr, "Error sending a frame for encoding: %s\n", av_err2str(ret));
@@ -41,9 +42,25 @@ bool libav_encode_frame(AVCodecContext* context, AVFrame* frame, AVPacket* pkt) 
             exit(1);
         }
 
-        // printf("Write packet %3"PRId64" (size=%5d)\n", pkt->pts, pkt->size);
         return true;
     }
+}
+
+AVFrame* libav_new_frame(int format, int width, int height) {
+	AVFrame* frame = av_frame_alloc();
+	frame->format = format;
+	frame->width = width;
+	frame->height = height;
+
+	int ret = av_frame_get_buffer(frame, 0);
+
+	// TODO:
+	if (ret < 0) {
+		fprintf(stderr, "Could not allocate the video frame data\n");
+		exit(1);
+	}
+
+    return frame;
 }
 
 // not tested  yet - might not work

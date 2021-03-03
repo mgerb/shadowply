@@ -1,15 +1,30 @@
 #include <Windows.h>
 #include "window_util.h"
 
+window_util_size window_util_get_size(const char* title) {
+	HWND window = window_util_find_window(title);
+	RECT rect;
+	window_util_size size = { 0, 0 };
+
+	if (GetClientRect(window, &rect)) {
+		size.width = rect.right - rect.left;
+		size.height = rect.bottom - rect.top;
+	}
+
+	DeleteObject(window);
+
+	return size;
+}
+
 HWND window_util_find_window(const char* title) {
-	struct window_util_window* window = &(struct window_util_window) { title };
+	window_util_window* window = &(window_util_window) { title };
 	EnumWindows(EnumWindowsProc, window);
 	return window->window;
 }
 
 BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam)
 {
-	struct window_util_window* window = (struct window_util_window*)lParam;
+	window_util_window* window = (window_util_window*)lParam;
 
 	char buffer[256];
 	int written = GetWindowTextA(hwnd, buffer, 256);

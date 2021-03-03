@@ -3,7 +3,7 @@
 #include "../libav.h"
 #include <libavcodec/avcodec.h>
 
-void dc_capture_init(dc_capture* c, char* title) {
+void dc_capture_init(dc_capture* c, char* title, int pix_fmt) {
 	memset(c, 0, sizeof(dc_capture));
 
 	c->window = window_util_find_window(title);
@@ -28,19 +28,7 @@ void dc_capture_init(dc_capture* c, char* title) {
 
 	c->bmi = bmi;
 
-
-	c->frame = av_frame_alloc();
-	c->frame->format = AV_PIX_FMT_YUV420P;
-	c->frame->width = c->width;
-	c->frame->height = c->height;
-
-	int ret = av_frame_get_buffer(c->frame, 0);
-	if (ret < 0) {
-		fprintf(stderr, "Could not allocate the video frame data\n");
-		exit(1);
-	}
-
-	int size = avpicture_get_size(c->frame->format, c->width, c->height);
+	c->frame = libav_new_frame(pix_fmt, c->width, c->height);
 }
 
 void dc_capture_free(dc_capture* c) {
@@ -74,6 +62,7 @@ void dc_capture_tick(dc_capture* c) {
 
 	ReleaseDC(NULL, hdc_target);
 
-	libav_rgb_to_yuv(c->frame, c->rgb, c->width, c->height);
+	//libav_rgb_to_yuv(c->frame, c->rgb, c->width, c->height);
+	libav_fill_frame(c->frame, c->rgb);
 }
 

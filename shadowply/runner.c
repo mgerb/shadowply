@@ -6,20 +6,24 @@
 #include <libavformat/avformat.h>
 #include <stdbool.h>
 #include <pthread.h>
+#include "window_util.h"
 
-void runner_init(runner* r, char* window_title, int fps, int bit_rate) {
+void runner_init(runner* r, char* window_title, int fps, int bit_rate, int max_seconds) {
 	memset(r, 0, sizeof(runner));
 
 	r->exit_threads = false;
 	r->fps = fps;
+	r->max_seconds = max_seconds;
 
-	// init capture object
-	r->dc_capture = malloc(sizeof(dc_capture));
-	dc_capture_init(r->dc_capture, window_title);
+	window_util_size window_size = window_util_get_size(window_title);
 
 	// init encoder object
 	r->encoder = malloc(sizeof(encoder));
-	encoder_init(r->encoder, r->dc_capture->width, r->dc_capture->height, fps, AV_CODEC_ID_H264, bit_rate);
+	encoder_init(r->encoder, window_size.width, window_size.height, fps, bit_rate);
+
+	// init capture object
+	r->dc_capture = malloc(sizeof(dc_capture));
+	dc_capture_init(r->dc_capture, window_title, r->encoder->ctx->pix_fmt);
 
 	// init mutex for threading
 	pthread_mutex_init(&r->mutex, NULL);
@@ -43,17 +47,19 @@ void runner_free(runner* r) {
 	while (node != NULL) {
 		runner_pkt_node* tmp = node;
 		node = node->next;
-		av_packet_unref(tmp->pkt);
-		av_packet_free(&tmp->pkt);
-		free(tmp);
+		runner_pkt_node_free(tmp);
 	}
-
 	av_frame_free(&r->texture_frame);
-
 	dc_capture_free(r->dc_capture);
 	encoder_free(r->encoder);
-
 	free(r);
+}
+
+// NOTE: doesn't free node->next because it points to next item in linked list
+void runner_pkt_node_free(runner_pkt_node* node) {
+	av_packet_unref(node->pkt);
+	av_packet_free(&node->pkt);
+	free(node);
 }
 
 void runner_start(runner* r) {
@@ -106,8 +112,6 @@ void runner_start_encoder_loop(runner* r) {
 	uint64_t nanoseconds_per_frame = util_get_nanoseconds_per_frame(r->fps);
 	uint64_t init_time = util_get_system_time_ns();
 
-	int frameCount = 1;
-
 	int max = 0;
 
 	for (;;) {
@@ -141,7 +145,6 @@ void runner_start_encoder_loop(runner* r) {
 		int frame_time = util_get_system_time_ns() - start_time;
 		max = frame_time > max ? frame_time : max;
 		printf("Encoder time: %" PRIu64 "\n", frame_time);
-		frameCount++;
 
 		if (exit) {
 			printf("Max encoder time: %" PRIu64 "\n", max);
@@ -153,15 +156,26 @@ void runner_start_encoder_loop(runner* r) {
 }
 
 void runner_add_pkt(runner* r, AVPacket* pkt) {
+	// remove head if we are at maximum amount of seconds stored in memory
+	bool remove_head = (r->encoder->frame_count / r->fps) > r->max_seconds;
+
 	runner_pkt_node* node = malloc(sizeof(runner_pkt_node));
 	node->pkt = pkt;
 	node->next = NULL;
 
+	// TODO:
+	//if (remove_head) {
+	//	printf("removing head");
+	//	runner_pkt_node* tmp = r->pkt_list.head;
+	//	r->pkt_list.head = r->pkt_list.head->next;
+	//	runner_pkt_node_free(tmp);
+	//}
+	//printf(r->pkt_list.head->pkt->size);
+
 	if (r->pkt_list.tail == NULL) {
 		r->pkt_list.head = node;
 		r->pkt_list.tail = node;
-	}
-	else {
+	} else {
 		r->pkt_list.tail->next = node;
 		r->pkt_list.tail = node;
 	}
